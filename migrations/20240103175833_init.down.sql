@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS "posts";
+
+DROP EXTENSION IF EXISTS "uuid-ossp";

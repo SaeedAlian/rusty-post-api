@@ -13,6 +13,11 @@ pub struct CreatePostDto {
     pub description: String,
 }
 
+#[derive(Deserialize)]
+pub struct PostPathParamDto {
+    pub post_id: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FilterPostDto {
     pub id: String,

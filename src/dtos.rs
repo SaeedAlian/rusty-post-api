@@ -13,11 +13,6 @@ pub struct CreatePostDto {
     pub description: String,
 }
 
-#[derive(Deserialize)]
-pub struct PostPathParamDto {
-    pub post_id: String,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FilterPostDto {
     pub id: String,
@@ -45,15 +40,15 @@ impl FilterPostDto {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PostData {
-    pub post: FilterPostDto,
+#[derive(Deserialize)]
+pub struct GetPostParamsDto {
+    pub post_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PostResponseDto {
     pub status: String,
-    pub data: PostData,
+    pub post: FilterPostDto,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

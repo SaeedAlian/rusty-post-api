@@ -4,7 +4,7 @@ use std::fmt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorResponse {
-    pub status: String,
+    pub status: u16,
     pub message: String,
 }
 
@@ -16,35 +16,8 @@ impl fmt::Display for ErrorResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct Response {
-    pub status: &'static str,
+    pub status: u16,
     pub message: String,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ErrorMessage {
-    ServerError,
-    PostNotFound,
-}
-
-impl ToString for ErrorMessage {
-    fn to_string(&self) -> String {
-        self.to_str().to_owned()
-    }
-}
-
-impl Into<String> for ErrorMessage {
-    fn into(self) -> String {
-        self.to_string()
-    }
-}
-
-impl ErrorMessage {
-    fn to_str(&self) -> String {
-        match self {
-            ErrorMessage::ServerError => "Server Error. Please try again later".to_string(),
-            ErrorMessage::PostNotFound => "Post not found".to_string(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -99,23 +72,23 @@ impl HttpError {
     pub fn into_http_response(self) -> HttpResponse {
         match self.status {
             400 => HttpResponse::BadRequest().json(Response {
-                status: "fail",
+                status: self.status,
                 message: self.message.into(),
             }),
             404 => HttpResponse::NotFound().json(Response {
-                status: "fail",
+                status: self.status,
                 message: self.message.into(),
             }),
             401 => HttpResponse::Unauthorized().json(Response {
-                status: "fail",
+                status: self.status,
                 message: self.message.into(),
             }),
             409 => HttpResponse::Conflict().json(Response {
-                status: "fail",
+                status: self.status,
                 message: self.message.into(),
             }),
             500 => HttpResponse::InternalServerError().json(Response {
-                status: "error",
+                status: self.status,
                 message: self.message.into(),
             }),
             _ => {
@@ -125,8 +98,8 @@ impl HttpError {
                 );
 
                 HttpResponse::InternalServerError().json(Response {
-                    status: "error",
-                    message: ErrorMessage::ServerError.into(),
+                    status: 500,
+                    message: "Internal Server Error".to_string(),
                 })
             }
         }

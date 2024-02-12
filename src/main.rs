@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db_client,
     };
 
-    println!("Server is running on http://localhost:{}", config.port);
+    println!("Server is running on {}:{}", config.url, config.port);
 
     HttpServer::new(move || {
         App::new()
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .service(health_checker_handler)
             .service(scopes::posts::posts_scope())
     })
-    .bind(("0.0.0.0", config.port))?
+    .bind((config.host_ip, config.port))?
     .run()
     .await?;
 

@@ -1,7 +1,8 @@
 use chrono::prelude::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Type};
 
-#[derive(Debug, Deserialize, sqlx::FromRow, sqlx::Type, Serialize, Clone)]
+#[derive(Debug, Deserialize, FromRow, Type, Serialize, Clone)]
 pub struct Post {
     pub id: uuid::Uuid,
     pub title: String,

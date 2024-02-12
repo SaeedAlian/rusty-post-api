@@ -13,8 +13,21 @@ pub struct CreatePostDto {
     pub description: String,
 }
 
+#[derive(Validate, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct UpdatePostDto {
+    pub title: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Validate, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct SearchPostQueryDto {
+    pub title: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<usize>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct FilterPostDto {
+pub struct PostDto {
     pub id: String,
     pub title: String,
     pub description: String,
@@ -24,9 +37,9 @@ pub struct FilterPostDto {
     pub updated_at: DateTime<Utc>,
 }
 
-impl FilterPostDto {
+impl PostDto {
     pub fn filter_post(post: &Post) -> Self {
-        FilterPostDto {
+        Self {
             id: post.id.to_string(),
             title: post.title.to_owned(),
             description: post.description.to_owned(),
@@ -35,8 +48,8 @@ impl FilterPostDto {
         }
     }
 
-    pub fn filter_posts(posts: &[Post]) -> Vec<FilterPostDto> {
-        posts.iter().map(FilterPostDto::filter_post).collect()
+    pub fn filter_posts(posts: &[Post]) -> Vec<Self> {
+        posts.iter().map(Self::filter_post).collect()
     }
 }
 
@@ -47,13 +60,13 @@ pub struct GetPostParamsDto {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PostResponseDto {
-    pub status: String,
-    pub post: FilterPostDto,
+    pub status: u16,
+    pub post: PostDto,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PostListResponseDto {
-    pub status: String,
-    pub posts: Vec<FilterPostDto>,
+    pub status: u16,
+    pub posts: Vec<PostDto>,
     pub results: usize,
 }

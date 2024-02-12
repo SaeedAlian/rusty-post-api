@@ -1,8 +1,8 @@
 mod config;
 mod db;
 mod dtos;
-mod error;
 mod models;
+mod response;
 mod scopes;
 
 use actix_web::{get, middleware::Logger, web, App, HttpResponse, HttpServer, Responder};

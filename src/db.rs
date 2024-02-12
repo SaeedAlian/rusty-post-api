@@ -51,8 +51,9 @@ impl PostExt for DBClient {
         if let Some(title) = query.title {
             query_builder.push(" WHERE ");
 
-            query_builder.push(" title like ");
-            query_builder.push_bind(format!("%{}%", title));
+            // TODO: create index on title lowercased to boost title search performance
+            query_builder.push(" LOWER(title) LIKE ");
+            query_builder.push_bind(format!("%{}%", title.to_lowercase()));
         }
 
         query_builder.push(" OFFSET ");

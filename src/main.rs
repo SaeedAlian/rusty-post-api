@@ -46,7 +46,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         App::new()
             .app_data(web::Data::new(app_state.clone()))
             .wrap(Logger::default())
-            .service(health_checker_handler)
             .service(scopes::posts::posts_scope())
     })
     .bind((config.host_ip, config.port))?
@@ -54,10 +53,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
 
     Ok(())
-}
-
-#[get("/api/healthchecker")]
-async fn health_checker_handler() -> impl Responder {
-    const MESSAGE: &str = "Complete Restful API in Rust";
-    HttpResponse::Ok().json(serde_json::json!({"status": "success", "message": MESSAGE}))
 }

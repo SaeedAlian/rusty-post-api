@@ -1,9 +1,11 @@
 mod config;
 mod db;
+mod db_test;
 mod dtos;
 mod models;
 mod response;
 mod scopes;
+mod utils;
 
 use actix_web::{get, middleware::Logger, web, App, HttpResponse, HttpServer, Responder};
 use config::Config;

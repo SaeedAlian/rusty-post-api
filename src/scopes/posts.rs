@@ -3,8 +3,8 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
-    db::PostExt,
-    dtos::{
+    db::post::PostExt,
+    dtos::post::{
         CreatePostDto, GetPostParamsDto, PostDto, PostListResponseDto, PostResponseDto,
         SearchPostQueryDto, UpdatePostDto,
     },

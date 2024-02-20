@@ -1,9 +1,12 @@
 use sqlx::{Pool, Postgres};
-use uuid::Uuid;
 
 use crate::{
-    db::{DBClient, PostExt},
-    dtos::CreatePostDto,
+    db::person::PersonExt,
+    db::post::PostExt,
+    db::DBClient,
+    dtos::person::CreateUserDto,
+    dtos::post::CreatePostDto,
+    models::{Post, User},
 };
 
 #[allow(dead_code)]
@@ -13,7 +16,16 @@ pub struct TestPost {
 }
 
 #[allow(dead_code)]
-pub async fn init_test_posts(pool: &Pool<Postgres>) -> (Uuid, Uuid, Uuid, Uuid) {
+pub struct TestUser {
+    pub username: &'static str,
+    pub firstname: &'static str,
+    pub lastname: &'static str,
+    pub password: &'static str,
+    pub email: &'static str,
+}
+
+#[allow(dead_code)]
+pub async fn init_test_posts(pool: &Pool<Postgres>) -> (Post, Post, Post, Post, Post) {
     let db_client = DBClient::new(pool.clone());
 
     let posts: Vec<TestPost> = vec![
@@ -39,7 +51,7 @@ pub async fn init_test_posts(pool: &Pool<Postgres>) -> (Uuid, Uuid, Uuid, Uuid) 
             },
         ];
 
-    let mut post_ids = vec![];
+    let mut created_posts: Vec<Post> = vec![];
 
     for post_data in posts {
         let post = db_client
@@ -49,13 +61,75 @@ pub async fn init_test_posts(pool: &Pool<Postgres>) -> (Uuid, Uuid, Uuid, Uuid) 
             })
             .await
             .unwrap();
-        post_ids.push(post.id);
+
+        created_posts.push(post);
     }
 
     (
-        post_ids[0].clone(),
-        post_ids[1].clone(),
-        post_ids[2].clone(),
-        post_ids[3].clone(),
+        created_posts[0].clone(),
+        created_posts[1].clone(),
+        created_posts[2].clone(),
+        created_posts[3].clone(),
+        created_posts[4].clone(),
+    )
+}
+
+#[allow(dead_code)]
+pub async fn init_test_users(pool: &Pool<Postgres>) -> (User, User, User, User) {
+    let db_client = DBClient::new(pool.clone());
+
+    let users: Vec<TestUser> = vec![
+        TestUser {
+            firstname: "Alice",
+            lastname: "Smith",
+            username: "alice_smith",
+            password: "password123",
+            email: "alice@example.com",
+        },
+        TestUser {
+            firstname: "John",
+            lastname: "Doe",
+            username: "john_doe123",
+            password: "doe1234",
+            email: "john.doe@example.com",
+        },
+        TestUser {
+            firstname: "Sarah",
+            lastname: "Johnson",
+            username: "sarah_j",
+            password: "sarahpw",
+            email: "sarah.j@example.com",
+        },
+        TestUser {
+            firstname: "Michael",
+            lastname: "Brown",
+            username: "mbrown123",
+            password: "brownie456",
+            email: "michael.b@example.com",
+        },
+    ];
+
+    let mut created_users: Vec<User> = vec![];
+
+    for user_data in users {
+        let user = db_client
+            .save_user(CreateUserDto {
+                firstname: user_data.firstname.to_string(),
+                lastname: user_data.lastname.to_string(),
+                username: user_data.username.to_string(),
+                password: user_data.password.to_string(),
+                email: user_data.email.to_string(),
+            })
+            .await
+            .unwrap();
+
+        created_users.push(user);
+    }
+
+    (
+        created_users[0].clone(),
+        created_users[1].clone(),
+        created_users[2].clone(),
+        created_users[3].clone(),
     )
 }

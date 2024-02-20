@@ -1,22 +1,13 @@
 use async_trait::async_trait;
-use sqlx::{Pool, Postgres, QueryBuilder};
+use sqlx::QueryBuilder;
 use uuid::Uuid;
 
 use crate::{
-    dtos::{CreatePostDto, SearchPostQueryDto, UpdatePostDto},
+    dtos::post::{CreatePostDto, SearchPostQueryDto, UpdatePostDto},
     models::Post,
 };
 
-#[derive(Clone, Debug)]
-pub struct DBClient {
-    pool: Pool<Postgres>,
-}
-
-impl DBClient {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        DBClient { pool }
-    }
-}
+use super::DBClient;
 
 #[async_trait]
 pub trait PostExt {

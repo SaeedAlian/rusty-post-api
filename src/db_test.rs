@@ -6,7 +6,7 @@ use super::*;
 use crate::{
     db::person::PersonExt,
     db::post::PostExt,
-    dtos::person::{CreateUserDto, UpdateUserPublicInfoDto},
+    dtos::person::{CreateUserDto, UpdateUserDto},
     dtos::{
         person::SearchUserQueryDto,
         post::{CreatePostDto, SearchPostQueryDto, UpdatePostDto},
@@ -211,22 +211,48 @@ async fn test_get_user_by_id(pool: Pool<Postgres>) {
 }
 
 #[sqlx::test]
-async fn test_get_all_users(pool: Pool<Postgres>) {
+async fn test_get_all_users_without_emails(pool: Pool<Postgres>) {
     init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
     let users = db_client
-        .get_users(SearchUserQueryDto {
-            limit: Some(2),
-            page: Some(1),
-            username: None,
-            firstname: None,
-            lastname: None,
-        })
+        .get_users(
+            SearchUserQueryDto {
+                limit: Some(2),
+                page: Some(1),
+                username: None,
+                firstname: None,
+                lastname: None,
+            },
+            false,
+        )
         .await
         .unwrap();
 
     assert_eq!(users.len(), 2)
+}
+
+#[sqlx::test]
+async fn test_get_all_users_with_emails(pool: Pool<Postgres>) {
+    let (user_one, _, _, _) = init_test_users(&pool).await;
+    let db_client = DBClient::new(pool);
+
+    let users = db_client
+        .get_users(
+            SearchUserQueryDto {
+                limit: Some(2),
+                page: Some(1),
+                username: None,
+                firstname: None,
+                lastname: None,
+            },
+            true,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(user_one.emails.len(), users[0].emails.len());
+    assert_eq!(users.len(), 2);
 }
 
 #[sqlx::test]
@@ -235,13 +261,16 @@ async fn test_get_users_with_firstname_only(pool: Pool<Postgres>) {
     let db_client = DBClient::new(pool);
 
     let users = db_client
-        .get_users(SearchUserQueryDto {
-            limit: Some(4),
-            page: Some(1),
-            firstname: Some("Alic".to_string()),
-            lastname: None,
-            username: None,
-        })
+        .get_users(
+            SearchUserQueryDto {
+                limit: Some(4),
+                page: Some(1),
+                firstname: Some("Alic".to_string()),
+                lastname: None,
+                username: None,
+            },
+            false,
+        )
         .await
         .unwrap();
 
@@ -254,13 +283,16 @@ async fn test_get_users_with_lastname_only(pool: Pool<Postgres>) {
     let db_client = DBClient::new(pool);
 
     let users = db_client
-        .get_users(SearchUserQueryDto {
-            limit: Some(4),
-            page: Some(1),
-            lastname: Some("Doe".to_string()),
-            firstname: None,
-            username: None,
-        })
+        .get_users(
+            SearchUserQueryDto {
+                limit: Some(4),
+                page: Some(1),
+                lastname: Some("Doe".to_string()),
+                firstname: None,
+                username: None,
+            },
+            false,
+        )
         .await
         .unwrap();
 
@@ -273,13 +305,16 @@ async fn test_get_users_with_username_only(pool: Pool<Postgres>) {
     let db_client = DBClient::new(pool);
 
     let users = db_client
-        .get_users(SearchUserQueryDto {
-            limit: Some(4),
-            page: Some(1),
-            username: Some("123".to_string()),
-            firstname: None,
-            lastname: None,
-        })
+        .get_users(
+            SearchUserQueryDto {
+                limit: Some(4),
+                page: Some(1),
+                username: Some("123".to_string()),
+                firstname: None,
+                lastname: None,
+            },
+            false,
+        )
         .await
         .unwrap();
 
@@ -292,13 +327,16 @@ async fn test_get_users_with_full_search(pool: Pool<Postgres>) {
     let db_client = DBClient::new(pool);
 
     let users = db_client
-        .get_users(SearchUserQueryDto {
-            limit: Some(4),
-            page: Some(1),
-            username: Some("john".to_string()),
-            firstname: Some("Jo".to_string()),
-            lastname: Some("D".to_string()),
-        })
+        .get_users(
+            SearchUserQueryDto {
+                limit: Some(4),
+                page: Some(1),
+                username: Some("john".to_string()),
+                firstname: Some("Jo".to_string()),
+                lastname: Some("D".to_string()),
+            },
+            false,
+        )
         .await
         .unwrap();
 
@@ -316,6 +354,9 @@ async fn test_save_user(pool: Pool<Postgres>) {
         lastname: "User".to_string(),
         email: "new_user@example.com".to_string(),
         password: "abc12345".to_string(),
+        birthdate: "1999-10-10".to_string(),
+        gender: "male".to_string(),
+        is_profile_private: Some(false),
     };
 
     let new_user = db_client.save_user(dto.clone()).await.unwrap();
@@ -323,6 +364,9 @@ async fn test_save_user(pool: Pool<Postgres>) {
     assert_eq!(new_user.username, dto.username);
     assert_eq!(new_user.firstname, dto.firstname);
     assert_eq!(new_user.lastname, dto.lastname);
+    assert_eq!(new_user.gender.to_string(), dto.gender);
+    assert_eq!(new_user.birthdate.to_string(), dto.birthdate);
+    assert_eq!(new_user.is_profile_private, dto.is_profile_private.unwrap());
 }
 
 #[sqlx::test]
@@ -336,6 +380,9 @@ async fn test_save_user_with_existent_username(pool: Pool<Postgres>) {
         lastname: "User".to_string(),
         email: "new_user@example.com".to_string(),
         password: "abc12345".to_string(),
+        birthdate: "1999-10-10".to_string(),
+        gender: "male".to_string(),
+        is_profile_private: Some(false),
     };
 
     let res = db_client.save_user(dto.clone()).await;
@@ -346,6 +393,62 @@ async fn test_save_user_with_existent_username(pool: Pool<Postgres>) {
         }
         _ => {
             assert!(false, "Expected unique constraint violation error");
+        }
+    }
+}
+
+#[sqlx::test]
+async fn test_save_user_with_existent_email(pool: Pool<Postgres>) {
+    init_test_users(&pool).await;
+    let db_client = DBClient::new(pool);
+
+    let dto = CreateUserDto {
+        username: "alice_smith2".to_string(),
+        firstname: "New".to_string(),
+        lastname: "User".to_string(),
+        email: "alice@example.com".to_string(),
+        password: "abc12345".to_string(),
+        birthdate: "1999-10-10".to_string(),
+        gender: "male".to_string(),
+        is_profile_private: Some(false),
+    };
+
+    let res = db_client.save_user(dto.clone()).await;
+
+    match res {
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            assert!(true);
+        }
+        _ => {
+            assert!(false, "Expected unique constraint violation error");
+        }
+    }
+}
+
+#[sqlx::test]
+async fn test_save_user_with_wrong_gender(pool: Pool<Postgres>) {
+    init_test_users(&pool).await;
+    let db_client = DBClient::new(pool);
+
+    let dto = CreateUserDto {
+        username: "new_username".to_string(),
+        firstname: "New".to_string(),
+        lastname: "User".to_string(),
+        email: "new_user@example.com".to_string(),
+        password: "abc12345".to_string(),
+        birthdate: "1999-10-10".to_string(),
+        gender: "maleee".to_string(),
+        is_profile_private: Some(false),
+    };
+
+    let res = db_client.save_user(dto.clone()).await;
+
+    match res {
+        Err(sqlx::Error::Database(db_err)) if db_err.is_check_violation() => {
+            assert!(true);
+        }
+        _ => {
+            assert!(false, "Expected an error for gender enum");
         }
     }
 }
@@ -376,14 +479,18 @@ async fn test_update_user_username_only(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         username: Some("new_username".to_string()),
         firstname: None,
         lastname: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -405,14 +512,18 @@ async fn test_update_user_firstname_only(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         firstname: Some("New Firstname".to_string()),
         username: None,
         lastname: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -434,14 +545,18 @@ async fn test_update_user_lastname_only(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         lastname: Some("New Lastname".to_string()),
         username: None,
         firstname: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -463,14 +578,18 @@ async fn test_update_user_username_and_firstname(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         firstname: Some("New Firstname".to_string()),
         username: Some("new_username".to_string()),
         lastname: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -492,14 +611,18 @@ async fn test_update_user_username_and_lastname(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         lastname: Some("New Lastname".to_string()),
         username: Some("new_username".to_string()),
         firstname: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -521,14 +644,18 @@ async fn test_update_user_firstname_and_lastname(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         lastname: Some("New Lastname".to_string()),
         firstname: Some("New Firstname".to_string()),
         username: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -550,14 +677,18 @@ async fn test_update_user_firstname_and_lastname_and_username(pool: Pool<Postgre
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         lastname: Some("New Lastname".to_string()),
         firstname: Some("New Firstname".to_string()),
         username: Some("new_username".to_string()),
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
     let is_updated = db_client
-        .update_user_public_info(user_one.id, dto.clone())
+        .update_user(user_one.id, dto.clone())
         .await
         .unwrap();
 
@@ -579,15 +710,17 @@ async fn test_update_user_with_existent_username(pool: Pool<Postgres>) {
     let (user_one, _, _, _) = init_test_users(&pool).await;
     let db_client = DBClient::new(pool);
 
-    let dto = UpdateUserPublicInfoDto {
+    let dto = UpdateUserDto {
         username: Some("john_doe123".to_string()),
         firstname: None,
         lastname: None,
+        gender: None,
+        biography: None,
+        birthdate: None,
+        is_profile_private: None,
     };
 
-    let res = db_client
-        .update_user_public_info(user_one.id, dto.clone())
-        .await;
+    let res = db_client.update_user(user_one.id, dto.clone()).await;
 
     match res {
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {

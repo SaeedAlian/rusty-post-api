@@ -4,5 +4,4 @@ DROP TABLE IF EXISTS "emails";
 DROP TABLE IF EXISTS "people";
 
 DROP TYPE IF EXISTS person_role;
-
-DROP EXTENSION IF EXISTS "uuid-ossp";
+DROP TYPE IF EXISTS gender;

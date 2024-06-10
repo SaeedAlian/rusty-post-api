@@ -22,6 +22,9 @@ pub struct TestUser {
     pub lastname: &'static str,
     pub password: &'static str,
     pub email: &'static str,
+    pub gender: &'static str,
+    pub birthdate: &'static str,
+    pub is_profile_private: bool,
 }
 
 #[allow(dead_code)]
@@ -85,6 +88,9 @@ pub async fn init_test_users(pool: &Pool<Postgres>) -> (User, User, User, User) 
             username: "alice_smith",
             password: "password123",
             email: "alice@example.com",
+            gender: "female",
+            birthdate: "1999-01-01",
+            is_profile_private: false,
         },
         TestUser {
             firstname: "John",
@@ -92,6 +98,9 @@ pub async fn init_test_users(pool: &Pool<Postgres>) -> (User, User, User, User) 
             username: "john_doe123",
             password: "doe1234",
             email: "john.doe@example.com",
+            gender: "female",
+            birthdate: "1999-01-01",
+            is_profile_private: false,
         },
         TestUser {
             firstname: "Sarah",
@@ -99,6 +108,9 @@ pub async fn init_test_users(pool: &Pool<Postgres>) -> (User, User, User, User) 
             username: "sarah_j",
             password: "sarahpw",
             email: "sarah.j@example.com",
+            gender: "female",
+            birthdate: "1999-01-01",
+            is_profile_private: false,
         },
         TestUser {
             firstname: "Michael",
@@ -106,6 +118,9 @@ pub async fn init_test_users(pool: &Pool<Postgres>) -> (User, User, User, User) 
             username: "mbrown123",
             password: "brownie456",
             email: "michael.b@example.com",
+            gender: "female",
+            birthdate: "1999-01-01",
+            is_profile_private: false,
         },
     ];
 
@@ -118,6 +133,9 @@ pub async fn init_test_users(pool: &Pool<Postgres>) -> (User, User, User, User) 
                 lastname: user_data.lastname.to_string(),
                 username: user_data.username.to_string(),
                 password: user_data.password.to_string(),
+                birthdate: user_data.birthdate.to_string(),
+                gender: user_data.gender.to_string(),
+                is_profile_private: Some(user_data.is_profile_private),
                 email: user_data.email.to_string(),
             })
             .await

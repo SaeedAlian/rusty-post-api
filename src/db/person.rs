@@ -1,13 +1,14 @@
 use async_trait::async_trait;
+use chrono::DateTime;
 use sqlx::QueryBuilder;
 use uuid::Uuid;
 
 use crate::{
     dtos::person::{
-        CreateAdminDto, CreateUserDto, SearchAdminQueryDto, SearchUserQueryDto,
-        UpdateAdminPublicInfoDto, UpdateUserPublicInfoDto,
+        CreateAdminDto, CreateUserDto, SearchAdminQueryDto, SearchUserQueryDto, UpdateAdminDto,
+        UpdateUserDto,
     },
-    models::{Admin, User},
+    models::{Admin, Email, Gender, Person, User},
 };
 
 use super::DBClient;
@@ -18,25 +19,25 @@ pub trait PersonExt {
 
     async fn get_admin(&self, admin_id: Uuid) -> Result<Option<Admin>, sqlx::Error>;
 
-    async fn get_users(&self, query: SearchUserQueryDto) -> Result<Vec<User>, sqlx::Error>;
+    async fn get_users(
+        &self,
+        query: SearchUserQueryDto,
+        fetch_emails: bool,
+    ) -> Result<Vec<User>, sqlx::Error>;
 
-    async fn get_admins(&self, query: SearchAdminQueryDto) -> Result<Vec<Admin>, sqlx::Error>;
+    async fn get_admins(
+        &self,
+        query: SearchAdminQueryDto,
+        fetch_emails: bool,
+    ) -> Result<Vec<Admin>, sqlx::Error>;
 
     async fn save_user(&self, dto: CreateUserDto) -> Result<User, sqlx::Error>;
 
     async fn save_admin(&self, dto: CreateAdminDto) -> Result<Admin, sqlx::Error>;
 
-    async fn update_user_public_info(
-        &self,
-        user_id: Uuid,
-        dto: UpdateUserPublicInfoDto,
-    ) -> Result<bool, sqlx::Error>;
+    async fn update_user(&self, user_id: Uuid, dto: UpdateUserDto) -> Result<bool, sqlx::Error>;
 
-    async fn update_admin_public_info(
-        &self,
-        admin_id: Uuid,
-        dto: UpdateAdminPublicInfoDto,
-    ) -> Result<bool, sqlx::Error>;
+    async fn update_admin(&self, admin_id: Uuid, dto: UpdateAdminDto) -> Result<bool, sqlx::Error>;
 
     async fn delete_user(&self, user_id: Uuid) -> Result<bool, sqlx::Error>;
 
@@ -46,24 +47,58 @@ pub trait PersonExt {
 #[async_trait]
 impl PersonExt for DBClient {
     async fn get_user(&self, user_id: Uuid) -> Result<Option<User>, sqlx::Error> {
-        let user = sqlx::query_as(r#"SELECT * FROM people WHERE id = $1 AND role = 'user'"#)
-            .bind(user_id)
-            .fetch_optional(&self.pool)
+        let person: Option<Person> =
+            sqlx::query_as(r#"SELECT * FROM people WHERE id = $1 AND role = 'user'"#)
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        if let Some(mut person) = person {
+            let emails = sqlx::query_as!(
+                Email,
+                r#"SELECT * FROM emails WHERE owner_id = $1"#,
+                person.id
+            )
+            .fetch_all(&self.pool)
             .await?;
 
-        Ok(user)
+            person.emails = emails;
+
+            Ok(Some(User::from(person)))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_admin(&self, admin_id: Uuid) -> Result<Option<Admin>, sqlx::Error> {
-        let admin = sqlx::query_as(r#"SELECT * FROM people WHERE id = $1 AND role = 'admin'"#)
-            .bind(admin_id)
-            .fetch_optional(&self.pool)
+        let person: Option<Person> =
+            sqlx::query_as(r#"SELECT * FROM people WHERE id = $1 AND role = 'admin'"#)
+                .bind(admin_id)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        if let Some(mut person) = person {
+            let emails = sqlx::query_as!(
+                Email,
+                r#"SELECT * FROM emails WHERE owner_id = $1"#,
+                person.id
+            )
+            .fetch_all(&self.pool)
             .await?;
 
-        Ok(admin)
+            person.emails = emails;
+
+            Ok(Some(Admin::from(person)))
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn get_users(&self, query: SearchUserQueryDto) -> Result<Vec<User>, sqlx::Error> {
+    async fn get_users(
+        &self,
+        query: SearchUserQueryDto,
+        fetch_emails: bool,
+    ) -> Result<Vec<User>, sqlx::Error> {
         let page = query.page.unwrap_or(1);
         let limit = query.limit.unwrap_or(6);
         let offset: u32 = (page - 1) * limit as u32;
@@ -114,12 +149,34 @@ impl PersonExt for DBClient {
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit as i64);
 
-        let users = query_builder.build_query_as().fetch_all(&self.pool).await?;
+        let people: Vec<Person> = query_builder.build_query_as().fetch_all(&self.pool).await?;
 
-        Ok(users)
+        let mut result: Vec<User> = vec![];
+
+        for mut person in people.into_iter() {
+            if fetch_emails {
+                let emails = sqlx::query_as!(
+                    Email,
+                    r#"SELECT * FROM emails WHERE owner_id = $1"#,
+                    person.id
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                person.emails = emails;
+            }
+
+            result.push(User::from(person))
+        }
+
+        Ok(result)
     }
 
-    async fn get_admins(&self, query: SearchAdminQueryDto) -> Result<Vec<Admin>, sqlx::Error> {
+    async fn get_admins(
+        &self,
+        query: SearchAdminQueryDto,
+        fetch_emails: bool,
+    ) -> Result<Vec<Admin>, sqlx::Error> {
         let page = query.page.unwrap_or(1);
         let limit = query.limit.unwrap_or(6);
         let offset: u32 = (page - 1) * limit as u32;
@@ -170,62 +227,88 @@ impl PersonExt for DBClient {
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit as i64);
 
-        let admins = query_builder.build_query_as().fetch_all(&self.pool).await?;
+        let people: Vec<Person> = query_builder.build_query_as().fetch_all(&self.pool).await?;
 
-        Ok(admins)
+        let mut result: Vec<Admin> = vec![];
+
+        for mut person in people.into_iter() {
+            if fetch_emails {
+                let emails = sqlx::query_as!(
+                    Email,
+                    r#"SELECT * FROM emails WHERE owner_id = $1"#,
+                    person.id
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                person.emails = emails;
+            }
+
+            result.push(Admin::from(person))
+        }
+
+        Ok(result)
     }
 
     async fn save_user(&self, dto: CreateUserDto) -> Result<User, sqlx::Error> {
-        let new_user: User = sqlx::query_as(r#"
-            INSERT INTO people (firstname, lastname, username, password, role) VALUES ($1, $2, $3, $4, 'user') RETURNING *
+        let mut new_person: Person = sqlx::query_as(r#"
+            INSERT INTO people 
+                (firstname, lastname, username, gender, is_profile_private, birthdate, password, role)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'user')
+                RETURNING *
         "#)
             .bind(dto.firstname)
             .bind(dto.lastname)
             .bind(dto.username)
+            .bind(Gender::from(dto.gender))
+            .bind(dto.is_profile_private)
+            .bind(DateTime::parse_from_str(&dto.birthdate, "%Y-%m-%d").unwrap())
             .bind(dto.password)
             .fetch_one(&self.pool).await?;
 
-        sqlx::query_as(
-            r#"
-            INSERT INTO emails (address, person_id) VALUES ($1, $2) RETURNING *
-        "#,
-        )
-        .bind(dto.email)
-        .bind(new_user.id)
-        .fetch_one(&self.pool)
-        .await?;
+        let email = sqlx::query_as!(
+        Email,
+        r#"INSERT INTO emails (address, owner_id, is_primary, is_private) VALUES ($1, $2, true, true) RETURNING *"#,
+        dto.email, new_person.id)
+            .fetch_one(&self.pool)
+            .await?;
 
-        Ok(new_user)
+        new_person.emails = vec![email];
+
+        Ok(User::from(new_person))
     }
 
     async fn save_admin(&self, dto: CreateAdminDto) -> Result<Admin, sqlx::Error> {
-        let new_admin: Admin = sqlx::query_as(r#"
-            INSERT INTO people (firstname, lastname, username, password, role) VALUES ($1, $2, $3, $4, 'admin') RETURNING *
-        "#)
-            .bind(dto.firstname)
-            .bind(dto.lastname)
-            .bind(dto.username)
-            .bind(dto.password)
-            .fetch_one(&self.pool).await?;
-
-        sqlx::query_as(
+        let mut new_person: Person = sqlx::query_as(
             r#"
-            INSERT INTO emails (address, person_id) VALUES ($1, $2) RETURNING *
+            INSERT INTO people 
+                (firstname, lastname, username, gender, birthdate, password, role)
+                VALUES ($1, $2, $3, $4, $5, $6, 'user')
+                RETURNING *
         "#,
         )
-        .bind(dto.email)
-        .bind(new_admin.id)
+        .bind(dto.firstname)
+        .bind(dto.lastname)
+        .bind(dto.username)
+        .bind(Gender::from(dto.gender))
+        .bind(DateTime::parse_from_str(&dto.birthdate, "%Y-%m-%d").unwrap())
+        .bind(dto.password)
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(new_admin)
+        let email = sqlx::query_as!(
+        Email,
+        r#"INSERT INTO emails (address, owner_id, is_primary, is_private) VALUES ($1, $2, true, true) RETURNING *"#,
+        dto.email, new_person.id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        new_person.emails = vec![email];
+
+        Ok(Admin::from(new_person))
     }
 
-    async fn update_user_public_info(
-        &self,
-        user_id: Uuid,
-        dto: UpdateUserPublicInfoDto,
-    ) -> Result<bool, sqlx::Error> {
+    async fn update_user(&self, user_id: Uuid, dto: UpdateUserDto) -> Result<bool, sqlx::Error> {
         let mut is_updated: bool = false;
 
         let mut query_builder = QueryBuilder::new(r#"UPDATE people"#);
@@ -252,6 +335,54 @@ impl PersonExt for DBClient {
 
             query_builder.push("lastname = ");
             query_builder.push_bind(lastname);
+        }
+
+        if let Some(birthdate) = dto.birthdate {
+            if !is_using_dto {
+                query_builder.push(" SET ");
+                is_using_dto = true;
+            } else {
+                query_builder.push(",");
+            }
+
+            query_builder.push("birthdate = ");
+            query_builder.push_bind(DateTime::parse_from_str(&birthdate, "%Y-%m-%d").unwrap());
+        }
+
+        if let Some(gender) = dto.gender {
+            if !is_using_dto {
+                query_builder.push(" SET ");
+                is_using_dto = true;
+            } else {
+                query_builder.push(",");
+            }
+
+            query_builder.push("gender = ");
+            query_builder.push_bind(Gender::from(gender));
+        }
+
+        if let Some(is_profile_private) = dto.is_profile_private {
+            if !is_using_dto {
+                query_builder.push(" SET ");
+                is_using_dto = true;
+            } else {
+                query_builder.push(",");
+            }
+
+            query_builder.push("is_profile_private = ");
+            query_builder.push_bind(is_profile_private);
+        }
+
+        if let Some(biography) = dto.biography {
+            if !is_using_dto {
+                query_builder.push(" SET ");
+                is_using_dto = true;
+            } else {
+                query_builder.push(",");
+            }
+
+            query_builder.push("biography = ");
+            query_builder.push_bind(biography);
         }
 
         if let Some(username) = dto.username {
@@ -279,11 +410,7 @@ impl PersonExt for DBClient {
         Ok(is_updated)
     }
 
-    async fn update_admin_public_info(
-        &self,
-        admin_id: Uuid,
-        dto: UpdateAdminPublicInfoDto,
-    ) -> Result<bool, sqlx::Error> {
+    async fn update_admin(&self, admin_id: Uuid, dto: UpdateAdminDto) -> Result<bool, sqlx::Error> {
         let mut is_updated: bool = false;
 
         let mut query_builder = QueryBuilder::new(r#"UPDATE people"#);
@@ -303,12 +430,37 @@ impl PersonExt for DBClient {
         if let Some(lastname) = dto.lastname {
             if !is_using_dto {
                 query_builder.push(" SET ");
+                is_using_dto = true;
             } else {
                 query_builder.push(",");
             }
 
             query_builder.push("lastname = ");
             query_builder.push_bind(lastname);
+        }
+
+        if let Some(birthdate) = dto.birthdate {
+            if !is_using_dto {
+                query_builder.push(" SET ");
+                is_using_dto = true;
+            } else {
+                query_builder.push(",");
+            }
+
+            query_builder.push("birthdate = ");
+            query_builder.push_bind(DateTime::parse_from_str(&birthdate, "%Y-%m-%d").unwrap());
+        }
+
+        if let Some(gender) = dto.gender {
+            if !is_using_dto {
+                query_builder.push(" SET ");
+                is_using_dto = true;
+            } else {
+                query_builder.push(",");
+            }
+
+            query_builder.push("gender = ");
+            query_builder.push_bind(Gender::from(gender));
         }
 
         if let Some(username) = dto.username {
